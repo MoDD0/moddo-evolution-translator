@@ -5,6 +5,9 @@
  *
  * This module integrates translation functionality into Evolution's
  * separate mail browser windows (opened via "Open in New Window").
+ *
+ * Supports both legacy GtkUIManager (Evolution < 3.56) and
+ * new EUIManager (Evolution >= 3.56) via compile-time detection.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -41,43 +44,37 @@ on_translate_finished_browser (GObject *source_object,
         g_warning ("Translate failed: %s", error ? error->message : "unknown error");
         return;
     }
-    /* Apply into this reader's display */
     translate_dom_apply_to_reader (reader, translated);
 }
 
-/**
- * action_translate_message_cb:
- * @action: The GTK action that triggered this callback
- * @user_data: The TranslateBrowserExtension instance
- *
- * Handles the "Translate Message" action in the browser window.
- * Extracts the current message body and initiates translation
- * using the common translation logic with status bar feedback.
- */
+/* ============================================================================
+ * Shared action logic (called from both old and new UI paths)
+ * ============================================================================ */
+
 static void
-action_translate_message_cb (GtkAction *action,
-                             gpointer   user_data)
+do_translate_browser (TranslateBrowserExtension *self)
 {
-    (void)action;  /* Unused parameter */
-    TranslateBrowserExtension *self = user_data;
     EMailReader *reader = E_MAIL_READER (e_extension_get_extensible (E_EXTENSION (self)));
 
-    /* Toggle behavior: if already translated, restore original */
+    /* Always clear stale state first — see do_translate_message() comment */
+    translate_dom_clear_if_message_changed_reader (reader);
+
     if (translate_dom_is_translated_reader (reader)) {
         translate_dom_restore_original_reader (reader);
         return;
     }
 
-    /* Extract the message body HTML */
+    /* Check if we have a cached translation (instant, no network) */
+    if (translate_dom_apply_cached_reader (reader))
+        return;
+
     g_autofree gchar *body_html = translate_get_selected_message_body_html_from_reader (reader);
     if (!body_html || !*body_html)
         return;
 
-    /* Get the shell backend for activity display */
     EShell *shell = e_shell_get_default ();
     EShellBackend *shell_backend = e_shell_get_backend_by_name (shell, "mail");
 
-    /* Use the centralized translation logic with activity feedback */
     translate_common_translate_async_with_activity (body_html,
                                                      shell_backend,
                                                      on_translate_finished_browser,
@@ -85,12 +82,146 @@ action_translate_message_cb (GtkAction *action,
 }
 
 static void
+do_show_original_browser (TranslateBrowserExtension *self)
+{
+    EMailReader *reader = E_MAIL_READER (e_extension_get_extensible (E_EXTENSION (self)));
+    translate_dom_restore_original_reader (reader);
+}
+
+static void
+do_translate_settings_browser (TranslateBrowserExtension *self)
+{
+    GtkWindow *parent = GTK_WINDOW (e_extension_get_extensible (E_EXTENSION (self)));
+    translate_preferences_show (parent);
+}
+
+#ifdef HAVE_EUI_MANAGER
+/* ============================================================================
+ * Evolution >= 3.56: EUIManager / EUIAction API
+ * ============================================================================ */
+
+#define BROWSER_ACTION_GROUP "translate-browser-actions"
+
+static void
+action_translate_message_cb (EUIAction *action,
+                             GVariant  *parameter,
+                             gpointer   user_data)
+{
+    do_translate_browser (TRANSLATE_BROWSER_EXTENSION (user_data));
+}
+
+static void
+action_show_original_cb (EUIAction *action,
+                         GVariant  *parameter,
+                         gpointer   user_data)
+{
+    do_show_original_browser (TRANSLATE_BROWSER_EXTENSION (user_data));
+}
+
+static void
+action_translate_settings_cb (EUIAction *action,
+                              GVariant  *parameter,
+                              gpointer   user_data)
+{
+    do_translate_settings_browser (TRANSLATE_BROWSER_EXTENSION (user_data));
+}
+
+static const EUIActionEntry browser_entries[] = {
+    { "translate-message-action",
+      NULL, N_("_Translate"), NULL,
+      N_("Translate the selected message"),
+      action_translate_message_cb, NULL, NULL, NULL },
+    { "translate-show-original-action",
+      NULL, N_("Show _Original"), NULL,
+      N_("Show the original content"),
+      action_show_original_cb, NULL, NULL, NULL },
+    { "translate-settings-action",
+      NULL, N_("Translate _Settings\xe2\x80\xa6"), NULL,
+      N_("Configure translation options"),
+      action_translate_settings_cb, NULL, NULL, NULL }
+};
+
+static void
+update_actions_cb (TranslateBrowserExtension *self)
+{
+    EMailReader *reader = E_MAIL_READER (e_extension_get_extensible (E_EXTENSION (self)));
+    gboolean has_message = FALSE;
+
+    translate_dom_clear_if_message_changed_reader (reader);
+
+    if (reader) {
+        g_autoptr(GPtrArray) uids = e_mail_reader_get_selected_uids (reader);
+        has_message = (uids && uids->len > 0);
+    }
+
+    EUIManager *ui_manager = e_mail_reader_get_ui_manager (reader);
+
+    static const gchar *translate_names[] = { "translate-message-action", NULL };
+    static const gchar *original_names[] = { "translate-show-original-action", NULL };
+
+    m_utils_enable_actions_by_name (ui_manager, BROWSER_ACTION_GROUP,
+                                     translate_names, has_message);
+    m_utils_enable_actions_by_name (ui_manager, BROWSER_ACTION_GROUP,
+                                     original_names,
+                                     translate_dom_is_translated_reader (reader));
+}
+
+static void
+add_ui (TranslateBrowserExtension *self, EMailBrowser *browser)
+{
+    const gchar *eui_def =
+        "<eui>"
+        "  <menu id='main-menu'>"
+        "    <section id='view-menu-translate' after='view-menu-actions'>"
+        "      <item action='" BROWSER_ACTION_GROUP ".translate-message-action'/>"
+        "      <item action='" BROWSER_ACTION_GROUP ".translate-show-original-action'/>"
+        "      <separator/>"
+        "      <item action='" BROWSER_ACTION_GROUP ".translate-settings-action'/>"
+        "    </section>"
+        "  </menu>"
+        "</eui>";
+
+    EMailReader *reader = E_MAIL_READER (browser);
+    EUIManager *ui_manager = e_mail_reader_get_ui_manager (reader);
+    GError *error = NULL;
+
+    e_ui_manager_add_actions_with_eui_data (
+        ui_manager,
+        BROWSER_ACTION_GROUP,
+        GETTEXT_PACKAGE,
+        browser_entries, G_N_ELEMENTS (browser_entries),
+        "translate-browser-ui",
+        eui_def, -1,
+        self, &error);
+
+    if (error) {
+        g_warning ("[translate-browser] Failed to add UI: %s", error->message);
+        g_error_free (error);
+        return;
+    }
+
+    g_signal_connect_swapped (browser, "update-actions",
+                              G_CALLBACK (update_actions_cb), self);
+    update_actions_cb (self);
+}
+
+#else /* Legacy GtkUIManager API (Evolution < 3.56) */
+/* ============================================================================
+ * Evolution < 3.56: GtkUIManager / GtkAction API
+ * ============================================================================ */
+
+static void
+action_translate_message_cb (GtkAction *action,
+                             gpointer   user_data)
+{
+    do_translate_browser (TRANSLATE_BROWSER_EXTENSION (user_data));
+}
+
+static void
 action_show_original_cb (GtkAction *action,
                          gpointer   user_data)
 {
-    TranslateBrowserExtension *self = user_data;
-    EMailReader *reader = E_MAIL_READER (e_extension_get_extensible (E_EXTENSION (self)));
-    translate_dom_restore_original_reader (reader);
+    do_show_original_browser (TRANSLATE_BROWSER_EXTENSION (user_data));
 }
 
 static const GtkActionEntry browser_entries[] = {
@@ -112,15 +243,13 @@ static void
 action_translate_settings_cb (GtkAction *action,
                               gpointer   user_data)
 {
-    TranslateBrowserExtension *self = user_data;
-    GtkWindow *parent = GTK_WINDOW (e_extension_get_extensible (E_EXTENSION (self)));
-    translate_preferences_show (parent);
+    do_translate_settings_browser (TRANSLATE_BROWSER_EXTENSION (user_data));
 }
 
 static const GtkActionEntry browser_settings_entries[] = {
     { "translate-settings-action",
       GTK_STOCK_PREFERENCES,
-      N_("Translate _Settings…"),
+      N_("Translate _Settings\xe2\x80\xa6"),
       NULL,
       N_("Configure translation options"),
       G_CALLBACK (action_translate_settings_cb) }
@@ -133,15 +262,14 @@ update_actions_cb (TranslateBrowserExtension *self)
     GtkUIManager *ui_manager = e_mail_browser_get_ui_manager (E_MAIL_BROWSER (reader));
     gboolean has_message = FALSE;
 
-    /* Clear translation state if the displayed message has changed */
     translate_dom_clear_if_message_changed_reader (reader);
 
     if (reader) {
         g_autoptr(GPtrArray) uids = e_mail_reader_get_selected_uids (reader);
         has_message = (uids && uids->len > 0);
     }
-    m_utils_enable_actions (ui_manager, browser_entries, 1 /* first action only */, has_message);
-    m_utils_enable_actions (ui_manager, browser_entries + 1, 1 /* show original */, translate_dom_is_translated_reader (reader));
+    m_utils_enable_actions (ui_manager, browser_entries, 1, has_message);
+    m_utils_enable_actions (ui_manager, browser_entries + 1, 1, translate_dom_is_translated_reader (reader));
 }
 
 static void
@@ -174,11 +302,16 @@ add_ui (TranslateBrowserExtension *self, EMailBrowser *browser)
         g_error_free (error);
     }
 
-    /* Update enablement on focus/selection changes */
     g_signal_connect_swapped (browser, "update-actions",
                               G_CALLBACK (update_actions_cb), self);
     update_actions_cb (self);
 }
+
+#endif /* HAVE_EUI_MANAGER */
+
+/* ============================================================================
+ * Common boilerplate (shared by both API paths)
+ * ============================================================================ */
 
 static void
 translate_browser_extension_constructed (GObject *object)

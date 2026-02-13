@@ -27,6 +27,11 @@ gboolean translate_dom_is_translated_reader (EMailReader *reader);
 void     translate_dom_clear_if_message_changed (EShellView *shell_view);
 void     translate_dom_clear_if_message_changed_reader (EMailReader *reader);
 
+/* Check cache and apply instantly if a previous translation exists.
+ * Returns TRUE if a cached translation was applied. */
+gboolean translate_dom_apply_cached (EShellView *shell_view);
+gboolean translate_dom_apply_cached_reader (EMailReader *reader);
+
 G_END_DECLS
 
 #endif /* TRANSLATE_DOM_H */

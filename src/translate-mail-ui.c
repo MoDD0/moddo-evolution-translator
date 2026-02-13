@@ -5,6 +5,9 @@
  *
  * This module integrates translation functionality into Evolution's
  * main mail view interface, adding menu items and toolbar buttons.
+ *
+ * Supports both legacy GtkUIManager (Evolution < 3.56) and
+ * new EUIManager (Evolution >= 3.56) via compile-time detection.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -55,21 +58,20 @@ on_translate_finished (GObject      *source_object,
     translate_dom_apply_to_shell_view (shell_view, translated);
 }
 
-/**
- * action_translate_message_cb:
- * @action: The GTK action that triggered this callback
- * @user_data: The EShellView instance
- *
- * Handles the "Translate Message" action from the menu/toolbar.
- * Extracts the current message body and initiates translation
- * using the common translation logic with status bar feedback.
- */
+/* ============================================================================
+ * Shared action logic (called from both old and new UI paths)
+ * ============================================================================ */
+
 static void
-action_translate_message_cb (GtkAction *action,
-                             gpointer   user_data)
+do_translate_message (EShellView *shell_view)
 {
-    EShellView *shell_view = user_data;
     g_return_if_fail (E_IS_SHELL_VIEW (shell_view));
+
+    /* Always clear stale state first — the update-actions signal may not
+     * have fired yet if the user switched messages and immediately clicked
+     * Translate.  Without this, the toggle below would restore message A's
+     * original into message B's display. */
+    translate_dom_clear_if_message_changed (shell_view);
 
     /* Toggle behavior: if already translated, restore original */
     if (translate_dom_is_translated (shell_view)) {
@@ -77,21 +79,181 @@ action_translate_message_cb (GtkAction *action,
         return;
     }
 
-    /* Extract the message body HTML */
+    /* Check if we have a cached translation (instant, no network) */
+    if (translate_dom_apply_cached (shell_view))
+        return;
+
     g_autofree gchar *body_html = get_selected_message_body_html (shell_view);
     if (!body_html || !*body_html) {
         g_message ("[translate] No message body available to translate");
         return;
     }
 
-    /* Get the shell backend for activity display */
     EShellBackend *shell_backend = e_shell_view_get_shell_backend (shell_view);
-
-    /* Use the centralized translation logic with activity feedback */
     translate_common_translate_async_with_activity (body_html,
                                                      shell_backend,
                                                      on_translate_finished,
                                                      shell_view);
+}
+
+static void
+do_show_original (EShellView *shell_view)
+{
+    translate_dom_restore_original (shell_view);
+}
+
+static void
+do_translate_settings (EShellView *shell_view)
+{
+    EShellWindow *sw = e_shell_view_get_shell_window (shell_view);
+    GtkWindow *parent = sw ? GTK_WINDOW (sw) : NULL;
+    translate_preferences_show (parent);
+}
+
+#ifdef HAVE_EUI_MANAGER
+/* ============================================================================
+ * Evolution >= 3.56: EUIManager / EUIAction API
+ * ============================================================================ */
+
+#define TRANSLATE_ACTION_GROUP "translate-mail-actions"
+
+static void
+action_translate_message_cb (EUIAction *action,
+                             GVariant  *parameter,
+                             gpointer   user_data)
+{
+    do_translate_message (E_SHELL_VIEW (user_data));
+}
+
+static void
+action_show_original_cb (EUIAction *action,
+                         GVariant  *parameter,
+                         gpointer   user_data)
+{
+    do_show_original (E_SHELL_VIEW (user_data));
+}
+
+static void
+action_translate_settings_cb (EUIAction *action,
+                              GVariant  *parameter,
+                              gpointer   user_data)
+{
+    do_translate_settings (E_SHELL_VIEW (user_data));
+}
+
+static const EUIActionEntry translate_entries[] = {
+    { "translate-message-action",
+      NULL, N_("_Translate Message"), "<Control><Shift>T",
+      N_("Translate the selected message"),
+      action_translate_message_cb, NULL, NULL, NULL },
+    { "translate-show-original-action",
+      NULL, N_("Show _Original"), "<Control><Shift>O",
+      N_("Show the original content"),
+      action_show_original_cb, NULL, NULL, NULL },
+    { "translate-settings-action",
+      NULL, N_("Translate _Settings\xe2\x80\xa6"), NULL,
+      N_("Configure translation options"),
+      action_translate_settings_cb, NULL, NULL, NULL }
+};
+
+static void
+translate_mail_ui_update_actions_cb (EShellView *shell_view)
+{
+    EShellContent *shell_content;
+    EMailView *mail_view = NULL;
+    gboolean has_message = FALSE;
+
+    translate_dom_clear_if_message_changed (shell_view);
+
+    shell_content = e_shell_view_get_shell_content (shell_view);
+    g_object_get (shell_content, "mail-view", &mail_view, NULL);
+    if (E_IS_MAIL_PANED_VIEW (mail_view)) {
+        GtkWidget *message_list;
+        message_list = e_mail_reader_get_message_list (E_MAIL_READER (mail_view));
+        has_message = message_list_selected_count (MESSAGE_LIST (message_list)) > 0;
+    }
+    if (mail_view)
+        g_object_unref (mail_view);
+
+    EUIManager *ui_manager = e_shell_view_get_ui_manager (shell_view);
+
+    static const gchar *translate_names[] = { "translate-message-action", NULL };
+    static const gchar *original_names[] = { "translate-show-original-action", NULL };
+    static const gchar *settings_names[] = { "translate-settings-action", NULL };
+
+    m_utils_enable_actions_by_name (ui_manager, TRANSLATE_ACTION_GROUP,
+                                     translate_names, has_message);
+    m_utils_enable_actions_by_name (ui_manager, TRANSLATE_ACTION_GROUP,
+                                     original_names,
+                                     translate_dom_is_translated (shell_view));
+    m_utils_enable_actions_by_name (ui_manager, TRANSLATE_ACTION_GROUP,
+                                     settings_names, TRUE);
+}
+
+void
+translate_mail_ui_init (EShellView *shell_view)
+{
+    const gchar *eui_def =
+        "<eui>"
+        "  <menu id='main-menu'>"
+        "    <submenu id='translate-menu' after='custom-rules-actions'>"
+        "      <attribute name='label' translatable='yes'>_Translate</attribute>"
+        "      <item action='" TRANSLATE_ACTION_GROUP ".translate-message-action'/>"
+        "      <item action='" TRANSLATE_ACTION_GROUP ".translate-show-original-action'/>"
+        "      <separator/>"
+        "      <item action='" TRANSLATE_ACTION_GROUP ".translate-settings-action'/>"
+        "    </submenu>"
+        "  </menu>"
+        "</eui>";
+
+    g_return_if_fail (E_IS_SHELL_VIEW (shell_view));
+
+    EUIManager *ui_manager = e_shell_view_get_ui_manager (shell_view);
+    GError *error = NULL;
+
+    e_ui_manager_add_actions_with_eui_data (
+        ui_manager,
+        TRANSLATE_ACTION_GROUP,
+        GETTEXT_PACKAGE,
+        translate_entries, G_N_ELEMENTS (translate_entries),
+        "translate-mail-ui",
+        eui_def, -1,
+        shell_view, &error);
+
+    if (error) {
+        g_warning ("[translate] Failed to add UI: %s", error->message);
+        g_error_free (error);
+        return;
+    }
+
+    g_signal_connect (shell_view, "update-actions",
+                      G_CALLBACK (translate_mail_ui_update_actions_cb), NULL);
+}
+
+#else /* Legacy GtkUIManager API (Evolution < 3.56) */
+/* ============================================================================
+ * Evolution < 3.56: GtkUIManager / GtkAction API
+ * ============================================================================ */
+
+static void
+action_translate_message_cb (GtkAction *action,
+                             gpointer   user_data)
+{
+    do_translate_message (E_SHELL_VIEW (user_data));
+}
+
+static void
+action_show_original_cb (GtkAction *action,
+                         gpointer   user_data)
+{
+    do_show_original (E_SHELL_VIEW (user_data));
+}
+
+static void
+action_translate_settings_cb (GtkAction *action,
+                              gpointer   user_data)
+{
+    do_translate_settings (E_SHELL_VIEW (user_data));
 }
 
 static const GtkActionEntry translate_menu_action[] = {
@@ -112,14 +274,6 @@ static const GtkActionEntry translate_message_menu_entries[] = {
       G_CALLBACK (action_translate_message_cb) }
 };
 
-static void
-action_show_original_cb (GtkAction *action,
-                         gpointer   user_data)
-{
-    EShellView *shell_view = user_data;
-    translate_dom_restore_original (shell_view);
-}
-
 static const GtkActionEntry translate_show_original_entries[] = {
     { "translate-show-original-action",
       GTK_STOCK_REFRESH,
@@ -129,20 +283,10 @@ static const GtkActionEntry translate_show_original_entries[] = {
       G_CALLBACK (action_show_original_cb) }
 };
 
-static void
-action_translate_settings_cb (GtkAction *action,
-                              gpointer   user_data)
-{
-    EShellView *shell_view = user_data;
-    EShellWindow *sw = e_shell_view_get_shell_window (shell_view);
-    GtkWindow *parent = sw ? GTK_WINDOW (sw) : NULL;
-    translate_preferences_show (parent);
-}
-
 static const GtkActionEntry translate_settings_entries[] = {
     { "translate-settings-action",
       GTK_STOCK_PREFERENCES,
-      N_("Translate _Settings…"),
+      N_("Translate _Settings\xe2\x80\xa6"),
       NULL,
       N_("Configure translation options"),
       G_CALLBACK (action_translate_settings_cb) }
@@ -156,7 +300,6 @@ translate_mail_ui_update_actions_cb (EShellView *shell_view)
     GtkUIManager *ui_manager;
     gboolean has_message = FALSE;
 
-    /* Clear translation state if the displayed message has changed */
     translate_dom_clear_if_message_changed (shell_view);
 
     shell_content = e_shell_view_get_shell_content (shell_view);
@@ -166,6 +309,8 @@ translate_mail_ui_update_actions_cb (EShellView *shell_view)
         message_list = e_mail_reader_get_message_list (E_MAIL_READER (mail_view));
         has_message = message_list_selected_count (MESSAGE_LIST (message_list)) > 0;
     }
+    if (mail_view)
+        g_object_unref (mail_view);
 
     EShellWindow *sw = e_shell_view_get_shell_window (shell_view);
     ui_manager = sw ? e_shell_window_get_ui_manager (sw) : NULL;
@@ -174,7 +319,6 @@ translate_mail_ui_update_actions_cb (EShellView *shell_view)
                             G_N_ELEMENTS (translate_message_menu_entries),
                             has_message);
 
-    /* Enable 'Show Original' when a translation is currently applied */
     m_utils_enable_actions (ui_manager,
                             translate_show_original_entries,
                             G_N_ELEMENTS (translate_show_original_entries),
@@ -242,3 +386,5 @@ translate_mail_ui_init (EShellView *shell_view)
     g_signal_connect (shell_view, "update-actions",
                       G_CALLBACK (translate_mail_ui_update_actions_cb), NULL);
 }
+
+#endif /* HAVE_EUI_MANAGER */

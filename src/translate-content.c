@@ -10,6 +10,7 @@
 #include <camel/camel.h>
 #include <mail/e-mail-view.h>
 #include <mail/e-mail-paned-view.h>
+#include <mail/e-mail-display.h>
 #include <mail/message-list.h>
 
 #include "translate-content.h"
@@ -100,26 +101,31 @@ plain_to_html (const gchar *text)
 gchar *
 translate_get_selected_message_body_html_from_reader (EMailReader *reader)
 {
-    EMailView *mail_view = NULL;
     g_autoptr(CamelFolder) folder = NULL;
-    g_autoptr(GPtrArray) selected_uids = NULL;
+    const gchar *uid = NULL;
 
     g_return_val_if_fail (E_IS_MAIL_READER (reader), NULL);
 
-    /* For EMailBrowser, reader itself owns selection; for EMailPanedView, get from view */
-    if (E_IS_MAIL_PANED_VIEW (reader)) {
-        mail_view = E_MAIL_VIEW (reader);
-        selected_uids = e_mail_reader_get_selected_uids (reader);
-        folder = e_mail_reader_ref_folder (reader);
-    } else {
-        selected_uids = e_mail_reader_get_selected_uids (reader);
-        folder = e_mail_reader_ref_folder (reader);
-    }
-
-    if (!folder || !selected_uids || selected_uids->len == 0)
+    /* Get the message UID from the DISPLAY's part list, not the selection model.
+     * This ensures consistency with translate-dom.c's state management, which
+     * also uses the display's part list to track original content.
+     * Fixes Issue #5: wrong original content restored when switching messages. */
+    EMailDisplay *display = e_mail_reader_get_mail_display (reader);
+    if (!display)
         return NULL;
 
-    const gchar *uid = (const gchar*)g_ptr_array_index (selected_uids, 0);
+    EMailPartList *part_list = e_mail_display_get_part_list (display);
+    if (!part_list)
+        return NULL;
+
+    uid = e_mail_part_list_get_message_uid (part_list);
+    if (!uid)
+        return NULL;
+
+    folder = e_mail_reader_ref_folder (reader);
+    if (!folder)
+        return NULL;
+
     g_autoptr(GError) error = NULL;
     CamelMimeMessage *msg = camel_folder_get_message_sync (folder, uid, NULL, &error);
     if (!msg)

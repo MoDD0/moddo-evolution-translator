@@ -1,20 +1,37 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* m-utils.c
- * Simple UI manager utilities for enabling/disabling actions
+ * Simple UI manager utilities for enabling/disabling actions.
+ * Supports both legacy GtkUIManager and new EUIManager APIs.
  */
 
 #include "m-utils.h"
 
-/**
- * m_utils_enable_actions:
- * @ui_manager: The UI manager containing the actions
- * @entries: Array of GtkActionEntry structures
- * @n_entries: Number of entries to process
- * @enable: TRUE to enable actions, FALSE to disable them
- *
- * Helper function to enable or disable a set of UI actions.
- * Iterates through the action entries and sets their sensitivity.
- */
+#ifdef HAVE_EUI_MANAGER
+
+void
+m_utils_enable_actions_by_name (EUIManager  *ui_manager,
+                                 const gchar *group_name,
+                                 const gchar * const *action_names,
+                                 gboolean     enable)
+{
+    EUIActionGroup *group;
+
+    if (!ui_manager || !group_name || !action_names)
+        return;
+
+    group = e_ui_manager_get_action_group (ui_manager, group_name);
+    if (!group)
+        return;
+
+    for (guint i = 0; action_names[i] != NULL; i++) {
+        EUIAction *action = e_ui_action_group_get_action (group, action_names[i]);
+        if (action)
+            e_ui_action_set_sensitive (action, enable);
+    }
+}
+
+#else /* Legacy GtkUIManager API */
+
 void
 m_utils_enable_actions (GtkUIManager *ui_manager,
                         const GtkActionEntry *entries,
@@ -28,13 +45,11 @@ m_utils_enable_actions (GtkUIManager *ui_manager,
     if (!ui_manager)
         return;
 
-    /* Get the first action group (or iterate all if needed) */
     GList *groups = gtk_ui_manager_get_action_groups (ui_manager);
     if (!groups)
         return;
 
     for (i = 0; i < n_entries; i++) {
-        /* Search for the action in all action groups */
         GList *group_iter;
         for (group_iter = groups; group_iter; group_iter = group_iter->next) {
             action_group = GTK_ACTION_GROUP (group_iter->data);
@@ -47,3 +62,5 @@ m_utils_enable_actions (GtkUIManager *ui_manager,
         }
     }
 }
+
+#endif /* HAVE_EUI_MANAGER */

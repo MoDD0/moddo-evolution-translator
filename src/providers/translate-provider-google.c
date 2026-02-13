@@ -108,6 +108,10 @@ on_helper_done (GObject *source, GAsyncResult *res, gpointer user_data)
         g_object_unref (task);
         return;
     }
+    /* Log any stderr output from the Python helper for diagnostics */
+    if (stderr_str && *stderr_str) {
+        g_warning ("[google] Python helper stderr: %s", stderr_str);
+    }
     if (!g_subprocess_get_successful (proc)) {
         g_task_return_new_error (task, G_SPAWN_ERROR, G_SPAWN_ERROR_FAILED,
                                  "Translate helper failed: %s", stderr_str ? stderr_str : "unknown");
@@ -214,7 +218,7 @@ tp_google_translate_async (gpointer              self,
              python, helper_path, target_copy, is_html ? "--html" : "--text");
 
     g_autoptr(GError) error = NULL;
-    GSubprocess *proc = g_subprocess_newv (argvv, G_SUBPROCESS_FLAGS_STDIN_PIPE | G_SUBPROCESS_FLAGS_STDOUT_PIPE, &error);
+    GSubprocess *proc = g_subprocess_newv (argvv, G_SUBPROCESS_FLAGS_STDIN_PIPE | G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDERR_PIPE, &error);
     if (!proc) {
         g_task_return_new_error (task, G_SPAWN_ERROR, G_SPAWN_ERROR_FAILED,
                                  "Failed to spawn helper: %s", error ? error->message : "unknown error");

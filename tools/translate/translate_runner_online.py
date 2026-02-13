@@ -70,8 +70,8 @@ def detect_language(text: str, is_html: bool = False) -> str:
 def translate_html_carefully(translator, html_content: str) -> str:
     """
     Translate HTML content while preserving structure.
-    Uses BeautifulSoup to parse and only translate text nodes.
-    Implements batch translation for efficiency.
+    Uses BeautifulSoup to parse and translates text nodes inline
+    during tree traversal (same proven approach as the Argos runner).
 
     Args:
         translator: deep-translator translator instance
@@ -82,116 +82,73 @@ def translate_html_carefully(translator, html_content: str) -> str:
     """
     try:
         from bs4 import BeautifulSoup, NavigableString, Comment, Doctype
+        import re
 
-        # Try multiple parsers in order of preference: lxml > html5lib > html.parser
-        parser = None
-        for p in ['lxml', 'html5lib', 'html.parser']:
-            try:
-                soup = BeautifulSoup(html_content, p)
-                parser = p
-                debug_log(f"Using parser: {parser}")
-                break
-            except Exception:
-                continue
+        # Use html.parser — best for email HTML with potentially malformed content
+        soup = BeautifulSoup(html_content, 'html.parser')
+        debug_log("Using parser: html.parser")
 
-        if not parser:
-            soup = BeautifulSoup(html_content, 'html.parser')
-            parser = 'html.parser'
-            debug_log(f"Fallback to parser: {parser}")
+        def should_translate_text(text):
+            """Check if text is worth translating"""
+            if not text:
+                return False
+            cleaned = text.strip()
+            if not cleaned or len(cleaned) < 2:
+                return False
+            # Skip numbers-only text
+            if re.match(r'^[\d\s\W]+$', cleaned):
+                return False
+            # Skip URLs and email addresses
+            if any(x in cleaned.lower() for x in ['http://', 'https://', 'mailto:', '@']):
+                return False
+            return True
 
-        # Collect all text nodes to translate in batch
-        texts_to_translate = []
-        nodes_to_update = []
+        # Tags whose text content must never be translated
+        SKIP_TAGS = frozenset({
+            'style', 'script', 'code', 'pre', 'kbd', 'samp', 'var',
+            'svg', 'math', 'textarea', 'noscript',
+        })
 
-        def collect_translatable_nodes(node):
-            """Recursively collect text nodes that need translation"""
-            if isinstance(node, NavigableString):
-                # Skip comments and doctypes
-                if isinstance(node, (Comment, Doctype)):
+        translated_count = 0
+
+        def translate_element(element):
+            """Recursively translate text nodes inline during traversal"""
+            nonlocal translated_count
+            if isinstance(element, NavigableString):
+                # Skip comments, doctype, and other special strings
+                if isinstance(element, (Comment, Doctype)):
                     return
 
-                text = str(node)
-                # Skip empty or whitespace-only text
-                if not text or text.isspace():
+                # Skip text inside non-translatable tags
+                if element.parent and element.parent.name in SKIP_TAGS:
                     return
 
-                # Skip very short text (likely structural like single spaces)
-                if len(text.strip()) < 2:
-                    return
-
-                # Skip numbers-only text
-                stripped = text.strip()
-                if stripped.replace(',', '').replace('.', '').replace(' ', '').isdigit():
-                    return
-
-                # Skip URLs and email addresses
-                if any(x in stripped.lower() for x in ['http://', 'https://', 'mailto:', '@']):
-                    return
-
-                # Collect this text for translation
-                texts_to_translate.append(stripped)
-                nodes_to_update.append({
-                    'node': node,
-                    'leading': text[:len(text) - len(text.lstrip())],
-                    'trailing': text[len(text.rstrip()):]
-                })
-            else:
-                # Recurse into child nodes
-                for child in list(node.children):
-                    collect_translatable_nodes(child)
-
-        # Collect all translatable text
-        collect_translatable_nodes(soup)
-
-        if not texts_to_translate:
-            debug_log("No translatable text found")
-            return str(soup)
-
-        debug_log(f"Collected {len(texts_to_translate)} text nodes for translation")
-
-        # Translate in batches for efficiency
-        translated_texts = []
-        batch_size = 50  # Process 50 texts at a time
-
-        for i in range(0, len(texts_to_translate), batch_size):
-            batch = texts_to_translate[i:i + batch_size]
-            try:
-                # Try batch translation first (faster)
-                if hasattr(translator, 'translate_batch'):
-                    batch_result = translator.translate_batch(batch)
-                    translated_texts.extend(batch_result)
-                    debug_log(f"Batch translated {len(batch)} texts")
-                else:
-                    # Fallback to individual translation
-                    for text in batch:
-                        try:
-                            translated_texts.append(translator.translate(text))
-                        except Exception as e:
-                            debug_log(f"Translation error for '{text[:50]}': {e}")
-                            translated_texts.append(text)  # Keep original on error
-            except Exception as e:
-                debug_log(f"Batch translation failed: {e}, falling back to individual")
-                # Fallback: translate individually
-                for text in batch:
+                text = str(element)
+                if should_translate_text(text):
                     try:
-                        translated_texts.append(translator.translate(text))
-                    except Exception as e2:
-                        debug_log(f"Individual translation error for '{text[:50]}': {e2}")
-                        translated_texts.append(text)  # Keep original on error
+                        stripped = text.strip()
+                        leading_ws = text[:len(text) - len(text.lstrip())]
+                        trailing_ws = text[len(text.rstrip()):]
 
-        # Apply translations back to nodes
-        for i, node_info in enumerate(nodes_to_update):
-            if i < len(translated_texts):
-                try:
-                    node = node_info['node']
-                    leading = node_info['leading']
-                    trailing = node_info['trailing']
-                    translated = translated_texts[i]
+                        translated = translator.translate(stripped)
 
-                    node.replace_with(leading + translated + trailing)
-                    debug_log(f"Translated: '{texts_to_translate[i][:50]}' -> '{translated[:50]}'")
-                except Exception as e:
-                    debug_log(f"Failed to update node: {e}")
+                        if translated and translated != stripped:
+                            element.replace_with(
+                                NavigableString(leading_ws + translated + trailing_ws)
+                            )
+                            translated_count += 1
+                            debug_log(f"Translated: '{stripped[:50]}' -> '{translated[:50]}'")
+                        else:
+                            debug_log(f"Skipped (no change): '{stripped[:50]}'")
+                    except Exception as e:
+                        debug_log(f"Failed to translate text node: {e}")
+            elif hasattr(element, 'children'):
+                # Use list() to safely iterate while modifying the tree
+                for child in list(element.children):
+                    translate_element(child)
+
+        translate_element(soup)
+        debug_log(f"Translated {translated_count} text nodes")
 
         return str(soup)
     except Exception as e:

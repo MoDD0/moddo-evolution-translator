@@ -60,9 +60,18 @@ pkg_check_modules(EVOLUTION_SHELL REQUIRED evolution-shell-3.0>=${REQUIRE_EVOLUT
 pkg_check_modules(EVOLUTION_CALENDAR REQUIRED evolution-calendar-3.0>=${REQUIRE_EVOLUTION_VERSION})
 pkg_check_modules(EVOLUTION_MAIL REQUIRED evolution-mail-3.0>=${REQUIRE_EVOLUTION_VERSION})
 pkg_check_modules(LIBECAL REQUIRED libecal-2.0>=${REQUIRE_EVOLUTION_VERSION})
+pkg_check_modules(LIBEBOOK REQUIRED libebook-1.2>=${REQUIRE_EVOLUTION_VERSION})
 pkg_check_modules(JSON_GLIB REQUIRED json-glib-1.0)
 
 pkg_check_variable(EVOLUTION_MODULE_DIR evolution-shell-3.0 moduledir)
+
+# Check if Evolution >= 3.56 (uses new EUIManager API instead of GtkUIManager)
+if(EVOLUTION_SHELL_VERSION VERSION_GREATER_EQUAL "3.56.0")
+  message(STATUS "Evolution >= 3.56 detected: using EUIManager API")
+  add_definitions(-DHAVE_EUI_MANAGER=1)
+else()
+  message(STATUS "Evolution < 3.56 detected: using legacy GtkUIManager API")
+endif()
 
 # Evolution only loads modules from /usr/lib*/evolution/modules/
 # Always use the system module directory from pkg-config
