@@ -192,6 +192,16 @@ are no longer valid. Custom plugin menus must use the `custom-menus` placeholder
 The submenu header (`translate-menu`) must be registered as an `EUIActionEntry`
 with a `NULL` activate callback.
 
+## Why a separate project?
+
+This started as a fork of [costantinoai/evolution-mail-translate](https://github.com/costantinoai/evolution-mail-translate).
+While extending it, we noticed the upstream project independently tagged their own `v1.2.0` release
+with different content — making it clear that the two projects had diverged enough to warrant
+a distinct identity rather than risk confusing users about which `v1.2.0` is which.
+
+The rename to **Moddo Evolution Translator** reflects that this is now an independently maintained
+project, not just a patch on top of the original.
+
 ## Credits
 
 - Originally forked from [costantinoai/evolution-mail-translate](https://github.com/costantinoai/evolution-mail-translate)
