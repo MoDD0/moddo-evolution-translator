@@ -16,6 +16,10 @@
       <summary>Preserve message formatting</summary>
       <description>Whether to attempt HTML-structure preserving translation.</description>
     </key>
+    <key name="translate-shortcut" type="s">
+      <default>'&lt;Alt&gt;&lt;Shift&gt;T'</default>
+      <summary>Keyboard shortcut for Translate Message action</summary>
+    </key>
   </schema>
 
   <!-- Provider-specific (relocatable) schema example for Argos -->

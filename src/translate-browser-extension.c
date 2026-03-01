@@ -131,7 +131,7 @@ static const EUIActionEntry browser_entries[] = {
       NULL, N_("_Translate"), NULL, NULL,
       NULL, NULL, NULL, NULL },
     { "translate-message-action",
-      NULL, N_("_Translate"), NULL,
+      "translate-symbolic", N_("_Translate"), NULL,
       N_("Translate the selected message"),
       action_translate_message_cb, NULL, NULL, NULL },
     { "translate-show-original-action",
@@ -184,6 +184,18 @@ add_ui (TranslateBrowserExtension *self, EMailBrowser *browser)
         "      </submenu>"
         "    </placeholder>"
         "  </menu>"
+        "  <toolbar id='main-toolbar-with-headerbar'>"
+        "    <placeholder id='mail-toolbar-common'>"
+        "      <separator/>"
+        "      <item action='translate-message-action'/>"
+        "    </placeholder>"
+        "  </toolbar>"
+        "  <toolbar id='main-toolbar-without-headerbar'>"
+        "    <placeholder id='mail-toolbar-common'>"
+        "      <separator/>"
+        "      <item action='translate-message-action'/>"
+        "    </placeholder>"
+        "  </toolbar>"
         "</eui>";
 
     EMailReader *reader = E_MAIL_READER (browser);

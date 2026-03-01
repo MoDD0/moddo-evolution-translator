@@ -146,11 +146,11 @@ static const EUIActionEntry translate_entries[] = {
       NULL, N_("_Translate"), NULL, NULL,
       NULL, NULL, NULL, NULL },
     { "translate-message-action",
-      NULL, N_("_Translate Message"), "<Control><Shift>T",
+      "translate-symbolic", N_("_Translate Message"), NULL,
       N_("Translate the selected message"),
       action_translate_message_cb, NULL, NULL, NULL },
     { "translate-show-original-action",
-      NULL, N_("Show _Original"), "<Control><Shift>O",
+      NULL, N_("Show _Original"), NULL,
       N_("Show the original content"),
       action_show_original_cb, NULL, NULL, NULL },
     { "translate-settings-action",
@@ -208,6 +208,12 @@ translate_mail_ui_init (EShellView *shell_view)
         "      </submenu>"
         "    </placeholder>"
         "  </menu>"
+        "  <toolbar id='mail-preview-toolbar'>"
+        "    <placeholder id='mail-toolbar-common'>"
+        "      <separator/>"
+        "      <item action='translate-message-action'/>"
+        "    </placeholder>"
+        "  </toolbar>"
         "</eui>";
 
     g_return_if_fail (E_IS_SHELL_VIEW (shell_view));
@@ -220,6 +226,19 @@ translate_mail_ui_init (EShellView *shell_view)
         translate_entries, G_N_ELEMENTS (translate_entries),
         shell_view,
         eui_def);
+
+    /* Apply shortcuts from GSettings (allows user customization) */
+    {
+        GSettings *settings = g_settings_new ("org.gnome.evolution.translate");
+        gchar *shortcut = g_settings_get_string (settings, "translate-shortcut");
+
+        EUIAction *translate_action = e_ui_manager_get_action (ui_manager, "translate-message-action");
+        if (translate_action && shortcut && *shortcut)
+            e_ui_action_set_accel (translate_action, shortcut);
+
+        g_free (shortcut);
+        g_object_unref (settings);
+    }
 
     g_signal_connect (shell_view, "update-actions",
                       G_CALLBACK (translate_mail_ui_update_actions_cb), NULL);

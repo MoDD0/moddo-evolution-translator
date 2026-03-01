@@ -2,7 +2,7 @@
 
 **Offline email translation for GNOME Evolution using ArgosTranslate**
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](#)
 [![License](https://img.shields.io/badge/license-LGPL--2.1%2B-green.svg)](#license)
 [![Documentation](https://img.shields.io/badge/docs-complete-brightgreen.svg)](docs/USER_GUIDE.md)
 
@@ -16,14 +16,16 @@ This Evolution extension adds instant, privacy-preserving email translation dire
 
 ## Key Features
 
-- **One-Click Translation**: Translate emails directly in the preview pane or message window
+- **One-Click Translation**: Translate emails directly from the toolbar, menu, or keyboard shortcut
+- **Toggle back instantly**: Press the shortcut (or click the toolbar button) again to restore the original
 - **100% Offline & Private**: Uses local translation models (ArgosTranslate), no internet required, no data transmitted
+- **Toolbar button**: Translate icon appears next to Reply/Forward in the mail toolbar
+- **Custom keyboard shortcut**: Default `Alt+Shift+T`, fully configurable in Translate Settings
 - **Install-on-Demand**: Automatically downloads missing translation models as needed
 - **HTML Email Support**: Preserves formatting, styles, and structure in translated emails
 - **Auto Language Detection**: Automatically detects source language
 - **50+ Languages**: Supports translation between 50+ language pairs
 - **GPU Acceleration**: Automatically uses CUDA when available for faster translation
-- **Robust & Production-Ready**: Zero code duplication, comprehensive error handling
 
 ## Quick Start
 
@@ -99,10 +101,10 @@ See **[USER_GUIDE.md](docs/USER_GUIDE.md)** for detailed installation instructio
 
 ### Usage
 
-1. Select an email and press `Ctrl+Shift+T` (or `Tools` → `Translate Message`)
-2. Toggle back to original with `Ctrl+Shift+T` again
-   - Alternatively, use `Ctrl+Shift+O` for “Show Original”
-3. Configure settings in `Edit` → `Preferences` → `Translate Settings`
+1. Select an email and press `Alt+Shift+T` — or click the **Translate button** in the toolbar
+2. Press the same shortcut (or click the toolbar button) again to toggle back to the original
+3. Configure settings in `Edit` → `Translate Settings`
+   - Change the target language, translation provider, or keyboard shortcut
 
 See **[USER_GUIDE.md](docs/USER_GUIDE.md)** for complete usage documentation.
 
@@ -114,11 +116,13 @@ See **[USER_GUIDE.md](docs/USER_GUIDE.md)** for complete usage documentation.
 
 ## Settings
 
-Open “Translate Settings” via Edit → Preferences → Translate Settings.
+Open “Translate Settings” via **Edit → Translate Settings**.
 
-- Target language: Choose your default translation target
-- Install models on demand: If enabled, missing Argos models are downloaded automatically the first time a pair is needed
-- Python venv: Create and manage your per-user venv with `evolution-translate-setup` (installs Python deps and optionally models)
+- **Target language**: Choose your default translation target
+- **Provider**: Argos Translate (offline) or Google Translate (online)
+- **Translate shortcut**: Customize the keyboard shortcut (default: `Alt+Shift+T`). Takes effect after restarting Evolution.
+- **Install models on demand**: If enabled, missing Argos models are downloaded automatically the first time a pair is needed
+- **Python venv**: Create and manage your per-user venv with `evolution-translate-setup` (installs Python deps and optionally models)
 
 Tip: You can also set environment variables for development overrides:
 - `TRANSLATE_HELPER_PATH` to point to a local translate_runner.py

@@ -38,15 +38,17 @@ evolution &
 
 ## Usage
 
-- Translate current message: `Ctrl+Shift+T` or Tools → Translate Message
-- Toggle to original: `Ctrl+Shift+T` again (or `Ctrl+Shift+O` for “Show Original”)
-- Settings: Edit → Preferences → Translate Settings
+- **Translate**: press `Alt+Shift+T` or click the **Translate button** in the toolbar
+- **Toggle back to original**: press the same shortcut or click the toolbar button again
+- **Settings**: Edit → Translate Settings
 
 ### Settings Explained
 
-- Target language: default output language for translations
-- Install models on demand: automatically download missing Argos Translate models the first time they are needed
-- Python setup: run `evolution-translate-setup` once per user to create a virtualenv and install Python dependencies and (optionally) default models
+- **Target language**: default output language for translations
+- **Provider**: Argos Translate (offline, privacy-focused) or Google Translate (online)
+- **Translate shortcut**: keyboard shortcut for the Translate action (default: `Alt+Shift+T`). Takes effect after restarting Evolution.
+- **Install models on demand**: automatically download missing Argos Translate models the first time they are needed
+- **Python setup**: run `evolution-translate-setup` once per user to create a virtualenv and install Python dependencies and (optionally) default models
 
 Advanced (optional):
 - `TRANSLATE_HELPER_PATH` can point to a local translate_runner.py for development
