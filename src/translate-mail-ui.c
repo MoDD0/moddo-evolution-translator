@@ -142,6 +142,9 @@ action_translate_settings_cb (EUIAction *action,
 }
 
 static const EUIActionEntry translate_entries[] = {
+    { "translate-menu",
+      NULL, N_("_Translate"), NULL, NULL,
+      NULL, NULL, NULL, NULL },
     { "translate-message-action",
       NULL, N_("_Translate Message"), "<Control><Shift>T",
       N_("Translate the selected message"),
@@ -196,35 +199,27 @@ translate_mail_ui_init (EShellView *shell_view)
     const gchar *eui_def =
         "<eui>"
         "  <menu id='main-menu'>"
-        "    <submenu id='translate-menu' after='custom-rules-actions'>"
-        "      <attribute name='label' translatable='yes'>_Translate</attribute>"
-        "      <item action='" TRANSLATE_ACTION_GROUP ".translate-message-action'/>"
-        "      <item action='" TRANSLATE_ACTION_GROUP ".translate-show-original-action'/>"
-        "      <separator/>"
-        "      <item action='" TRANSLATE_ACTION_GROUP ".translate-settings-action'/>"
-        "    </submenu>"
+        "    <placeholder id='custom-menus'>"
+        "      <submenu action='translate-menu'>"
+        "        <item action='translate-message-action'/>"
+        "        <item action='translate-show-original-action'/>"
+        "        <separator/>"
+        "        <item action='translate-settings-action'/>"
+        "      </submenu>"
+        "    </placeholder>"
         "  </menu>"
         "</eui>";
 
     g_return_if_fail (E_IS_SHELL_VIEW (shell_view));
 
     EUIManager *ui_manager = e_shell_view_get_ui_manager (shell_view);
-    GError *error = NULL;
-
     e_ui_manager_add_actions_with_eui_data (
         ui_manager,
         TRANSLATE_ACTION_GROUP,
         GETTEXT_PACKAGE,
         translate_entries, G_N_ELEMENTS (translate_entries),
-        "translate-mail-ui",
-        eui_def, -1,
-        shell_view, &error);
-
-    if (error) {
-        g_warning ("[translate] Failed to add UI: %s", error->message);
-        g_error_free (error);
-        return;
-    }
+        shell_view,
+        eui_def);
 
     g_signal_connect (shell_view, "update-actions",
                       G_CALLBACK (translate_mail_ui_update_actions_cb), NULL);

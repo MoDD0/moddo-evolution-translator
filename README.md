@@ -6,6 +6,10 @@
 [![License](https://img.shields.io/badge/license-LGPL--2.1%2B-green.svg)](#license)
 [![Documentation](https://img.shields.io/badge/docs-complete-brightgreen.svg)](docs/USER_GUIDE.md)
 
+> **This fork has been tested and verified on Manjaro Linux with GNOME Evolution 3.58.3.**
+> The original was written for Ubuntu/Debian. Two fixes were needed for compatibility with
+> Evolution ≥ 3.56's new EUIManager API — see [Changes from upstream](#changes-from-upstream).
+
 ## Overview
 
 This Evolution extension adds instant, privacy-preserving email translation directly within GNOME Evolution. Translate foreign language emails to your preferred language with a single click—all processing happens locally on your machine with no data ever leaving your computer.
@@ -117,8 +121,51 @@ We welcome contributions! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidel
 
 This project follows the same LGPL-2.1+ licensing model as the Evolution example module files.
 
+## Changes from upstream
+
+This fork fixes two issues that prevent the plugin from building and running on
+**Evolution ≥ 3.56** (which ships with Manjaro, Fedora, and other rolling-release distros):
+
+### 1. `e_ui_manager_add_actions_with_eui_data` API change
+
+Evolution 3.56 reduced the function from 10 arguments to 7. The `name` string,
+`-1` length, and `&error` parameters were removed, and `user_data` moved before `eui`:
+
+```c
+/* Old (Evolution < 3.56) */
+e_ui_manager_add_actions_with_eui_data(ui_manager, group, domain,
+    entries, n_entries, "ui-name", eui_def, -1, user_data, &error);
+
+/* New (Evolution ≥ 3.56) */
+e_ui_manager_add_actions_with_eui_data(ui_manager, group, domain,
+    entries, n_entries, user_data, eui_def);
+```
+
+### 2. EUI XML format for custom submenus
+
+The new EUI parser requires `<submenu action='...'>` referencing a registered action.
+The old `<submenu id='...'>` with `<attribute name='label'>` and `after=` attributes
+are no longer valid. Custom plugin menus must use the `custom-menus` placeholder:
+
+```xml
+<eui>
+  <menu id='main-menu'>
+    <placeholder id='custom-menus'>
+      <submenu action='translate-menu'>
+        <item action='translate-message-action'/>
+        ...
+      </submenu>
+    </placeholder>
+  </menu>
+</eui>
+```
+
+The submenu header (`translate-menu`) must be registered as an `EUIActionEntry`
+with a `NULL` activate callback.
+
 ## Credits
 
+- Original project by [costantinoai](https://github.com/costantinoai/evolution-mail-translate)
 - Built on [ArgosTranslate](https://github.com/argosopentech/argos-translate)
 - Integrates with [GNOME Evolution](https://wiki.gnome.org/Apps/Evolution)
 - Translation models from [OpenNMT](https://opennmt.net/)

@@ -127,6 +127,9 @@ action_translate_settings_cb (EUIAction *action,
 }
 
 static const EUIActionEntry browser_entries[] = {
+    { "translate-menu",
+      NULL, N_("_Translate"), NULL, NULL,
+      NULL, NULL, NULL, NULL },
     { "translate-message-action",
       NULL, N_("_Translate"), NULL,
       N_("Translate the selected message"),
@@ -172,33 +175,26 @@ add_ui (TranslateBrowserExtension *self, EMailBrowser *browser)
     const gchar *eui_def =
         "<eui>"
         "  <menu id='main-menu'>"
-        "    <section id='view-menu-translate' after='view-menu-actions'>"
-        "      <item action='" BROWSER_ACTION_GROUP ".translate-message-action'/>"
-        "      <item action='" BROWSER_ACTION_GROUP ".translate-show-original-action'/>"
-        "      <separator/>"
-        "      <item action='" BROWSER_ACTION_GROUP ".translate-settings-action'/>"
-        "    </section>"
+        "    <placeholder id='custom-menus'>"
+        "      <submenu action='translate-menu'>"
+        "        <item action='translate-message-action'/>"
+        "        <item action='translate-show-original-action'/>"
+        "        <separator/>"
+        "        <item action='translate-settings-action'/>"
+        "      </submenu>"
+        "    </placeholder>"
         "  </menu>"
         "</eui>";
 
     EMailReader *reader = E_MAIL_READER (browser);
     EUIManager *ui_manager = e_mail_reader_get_ui_manager (reader);
-    GError *error = NULL;
-
     e_ui_manager_add_actions_with_eui_data (
         ui_manager,
         BROWSER_ACTION_GROUP,
         GETTEXT_PACKAGE,
         browser_entries, G_N_ELEMENTS (browser_entries),
-        "translate-browser-ui",
-        eui_def, -1,
-        self, &error);
-
-    if (error) {
-        g_warning ("[translate-browser] Failed to add UI: %s", error->message);
-        g_error_free (error);
-        return;
-    }
+        self,
+        eui_def);
 
     g_signal_connect_swapped (browser, "update-actions",
                               G_CALLBACK (update_actions_cb), self);
