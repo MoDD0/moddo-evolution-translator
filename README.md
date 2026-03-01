@@ -1,4 +1,4 @@
-# Evolution Translation Extension
+# Moddo Evolution Translator
 
 **Offline email translation for GNOME Evolution using ArgosTranslate**
 
@@ -6,9 +6,10 @@
 [![License](https://img.shields.io/badge/license-LGPL--2.1%2B-green.svg)](#license)
 [![Documentation](https://img.shields.io/badge/docs-complete-brightgreen.svg)](docs/USER_GUIDE.md)
 
-> **This fork has been tested and verified on Manjaro Linux with GNOME Evolution 3.58.3.**
-> The original was written for Ubuntu/Debian. Two fixes were needed for compatibility with
-> Evolution ≥ 3.56's new EUIManager API — see [Changes from upstream](#changes-from-upstream).
+> **Tested and verified on Manjaro Linux with GNOME Evolution 3.58.3.**
+> Originally forked from [costantinoai/evolution-mail-translate](https://github.com/costantinoai/evolution-mail-translate),
+> extended and maintained independently. Compatibility with Evolution ≥ 3.56's new EUIManager API
+> was the original motivation — see [Changes from upstream](#changes-from-upstream).
 
 ## Overview
 
@@ -51,7 +52,7 @@ sudo apt install cmake pkg-config evolution-dev evolution-data-server-dev \
   python3 python3-venv python3-pip
 
 # Clone and build
-git clone https://github.com/MoDD0/evolution-mail-translate.git
+git clone https://github.com/MoDD0/moddo-evolution-translator.git
 cd evolution-mail-translate
 
 # Build and install to system directories (requires sudo)
@@ -73,7 +74,7 @@ evolution &
 sudo pacman -S --needed cmake pkgconf python python-pip
 
 # Clone this fork (has fixes for Evolution >= 3.56)
-git clone https://github.com/MoDD0/evolution-mail-translate.git
+git clone https://github.com/MoDD0/moddo-evolution-translator.git
 cd evolution-mail-translate
 
 # Build and install to system directories (requires sudo)
@@ -193,7 +194,7 @@ with a `NULL` activate callback.
 
 ## Credits
 
-- Original project by [costantinoai](https://github.com/costantinoai/evolution-mail-translate)
+- Originally forked from [costantinoai/evolution-mail-translate](https://github.com/costantinoai/evolution-mail-translate)
 - Built on [ArgosTranslate](https://github.com/argosopentech/argos-translate)
 - Integrates with [GNOME Evolution](https://wiki.gnome.org/Apps/Evolution)
 - Translation models from [OpenNMT](https://opennmt.net/)

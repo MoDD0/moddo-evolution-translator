@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.15)
 cmake_policy(VERSION 3.15)
 
-project(evolution-translate-extension C)
+project(moddo-evolution-translator C)
 
 include(GNUInstallDirs)
 
@@ -11,7 +11,7 @@ include(GNUInstallDirs)
 # Base bits
 #
 set(GETTEXT_PACKAGE "translate-module")
-set(RELEASE_NAME "Evolution Translate Extension")
+set(RELEASE_NAME "Moddo Evolution Translator")
 
 # Determine project version (single source of truth)
 # Priority: explicitly provided -DVERSION => debian/changelog => fallback
@@ -156,7 +156,7 @@ install(CODE [[
 ]])
 
 # CPack configuration for Debian package generation
-set(CPACK_PACKAGE_NAME "evolution-translate-extension")
+set(CPACK_PACKAGE_NAME "moddo-evolution-translator")
 set(CPACK_PACKAGE_VERSION "${VERSION}")
 set(CPACK_PACKAGE_RELEASE 1)
 set(CPACK_PACKAGE_CONTACT "Andrea Costantino <andreaivancostantino@outlook.it>")
@@ -177,7 +177,7 @@ set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
     "${CMAKE_SOURCE_DIR}/debian/postinst")
 
 # Provide a Homepage field to reduce lintian noise
-set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/costantinoai/evolution-mail-translate")
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/MoDD0/moddo-evolution-translator")
 
 # Use dpkg-shlibdeps to generate proper shared library dependencies
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
