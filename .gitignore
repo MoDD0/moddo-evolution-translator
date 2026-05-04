@@ -89,8 +89,9 @@ htmlcov/
 multipass/
 .vagrant/
 
-# Local development tools
+# Local Claude Code context — kept entirely off GitHub / Forgejo mirror.
 .claude/
+CLAUDE.md
 
 # Debug logs
 /tmp/evolution-debug.log
